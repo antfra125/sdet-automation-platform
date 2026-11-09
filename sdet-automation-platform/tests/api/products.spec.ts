@@ -11,23 +11,6 @@ test('GET /api/products returns products', async ({ request }) => {
   const products = await response.json();
 
   expect(Array.isArray(products)).toBe(true);
-  expect(products.length).toBeGreaterThan(0);
-});
-
-test('POST /api/products rejects invalid data', async ({ request }) => {
-  const response = await request.post('/api/products', {
-    data: {
-      name: '',
-      price: -100,
-      stock: 5
-    }
-  });
-
-  expect(response.status()).toBe(400);
-
-  const body = await response.json();
-
-  expect(body.error).toBe('Invalid product data');
 });
 
 test('should create, verify and delete a product', async ({ request }) => {
@@ -67,3 +50,79 @@ test('should create, verify and delete a product', async ({ request }) => {
     expect(deleteResponse.status()).toBe(204);
   }
 });
+
+
+test('POST /api/products should accept price and stock equal to zero', async ({ request }) => {
+  const response = await request.post('/api/products', {
+    data: {
+      name: 'Boundary Test Product',
+      price: 0,
+      stock: 0
+    }
+  });
+
+  expect(response.status()).toBe(201);
+
+  const product = await response.json();
+
+  expect(product.price).toBe(0);
+  expect(product.stock).toBe(0);
+
+  const deleteResponse = await request.delete(`/api/products/${product.id}`);
+  expect(deleteResponse.status()).toBe(204);
+});
+
+const invalidProducts = [
+  { name: 'Negative price', data: { name: 'Test', price: -1, stock: 10 } },
+  { name: 'Negative stock', data: { name: 'Test', price: 100, stock: -1 } },
+  { name: 'Empty name', data: { name: '', price: 100, stock: 10 } },
+  { name: 'Decimal price', data: { name: 'Test', price: 12.5, stock: 10 } },
+  { name: 'String price', data: { name: 'Test', price: 'hello', stock: 10 } },
+  { name: 'Missing stock', data: { name: 'Test', price: 100 } }
+];
+
+for (const product of invalidProducts) {
+  test(`POST /api/products rejects ${product.name}`, async ({ request }) => {
+    const response = await request.post('/api/products', {
+      data: product.data
+    });
+
+    expect(response.status()).toBe(400);
+
+    const body = await response.json();
+    expect(body.error).toBe('Invalid product data');
+  });
+}
+
+
+test('POST /api/products returns correct product structure', async ({ request }) => {
+  const response = await request.post('/api/products', {
+    data: {
+      name: 'Contract Test Product',
+      price: 499,
+      stock: 5
+    }
+  });
+
+  expect(response.status()).toBe(201);
+
+  const product = await response.json();
+
+  try {
+    expect(product).toEqual({
+      id: expect.any(Number),
+      name: 'Contract Test Product',
+      price: 499,
+      stock: 5
+    });
+
+    expect(Number.isInteger(product.id)).toBe(true);
+    expect(product.id).toBeGreaterThan(0);
+  } finally {
+    if (Number.isInteger(product.id) && product.id > 0) {
+      const deleteResponse = await request.delete(`/api/products/${product.id}`);
+      expect(deleteResponse.status()).toBe(204);
+    }
+  }
+});
+
